@@ -34,3 +34,6 @@ jobs:
 
       - name: Build web
         run: pnpm --filter web build
+
+      - name: Build deploy Docker image (SQLite)
+        run: docker build --target app-sqlite -t wewe-rss-20004-ci .
