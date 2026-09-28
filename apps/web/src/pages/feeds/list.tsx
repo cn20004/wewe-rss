@@ -1,4 +1,4 @@
-import { FC, useMemo } from 'react';
+import { FC, useMemo, useState } from 'react';
 import {
   Table,
   TableHeader,
@@ -10,6 +10,8 @@ import {
   Button,
   Spinner,
   Link,
+  Input,
+  Chip,
 } from '@nextui-org/react';
 import { trpc } from '@web/utils/trpc';
 import dayjs from 'dayjs';
@@ -17,14 +19,17 @@ import { useParams } from 'react-router-dom';
 
 const ArticleList: FC = () => {
   const { id } = useParams();
+  const [keyword, setKeyword] = useState('');
 
   const mpId = id || '';
+  const normalizedKeyword = keyword.trim();
 
   const { data, fetchNextPage, isLoading, hasNextPage } =
     trpc.article.list.useInfiniteQuery(
       {
         limit: 20,
-        mpId: mpId,
+        mpId,
+        keyword: normalizedKeyword || undefined,
       },
       {
         getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -32,15 +37,31 @@ const ArticleList: FC = () => {
     );
 
   const items = useMemo(() => {
-    const items = data
+    return data
       ? data.pages.reduce((acc, page) => [...acc, ...page.items], [] as any[])
       : [];
-
-    return items;
   }, [data]);
 
   return (
     <div>
+      <div className="flex items-center gap-3 px-1 pb-3">
+        <Input
+          isClearable
+          size="sm"
+          label="文章搜索"
+          placeholder="输入标题关键词，例如：就业、AI、大模型"
+          value={keyword}
+          onValueChange={setKeyword}
+          className="max-w-xl"
+        />
+        <Chip size="sm" variant="flat">
+          当前加载 {items.length} 篇
+        </Chip>
+        <Chip size="sm" variant="flat" color="primary">
+          20004 Edition
+        </Chip>
+      </div>
+
       <Table
         classNames={{
           base: 'h-full',
@@ -72,7 +93,9 @@ const ArticleList: FC = () => {
         </TableHeader>
         <TableBody
           isLoading={isLoading}
-          emptyContent={'暂无数据'}
+          emptyContent={
+            normalizedKeyword ? `没有找到包含“${normalizedKeyword}”的文章` : '暂无数据'
+          }
           items={items || []}
           loadingContent={<Spinner />}
         >
