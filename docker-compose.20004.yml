@@ -1,0 +1,23 @@
+services:
+  wewe-rss-20004:
+    container_name: wewe-rss-20004
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app-sqlite
+    restart: unless-stopped
+    ports:
+      - "${PORT:-4000}:4000"
+    environment:
+      DATABASE_TYPE: sqlite
+      DATABASE_URL: file:../data/wewe-rss.db
+      AUTH_CODE: "${AUTH_CODE:-20004}"
+      SERVER_ORIGIN_URL: "${SERVER_ORIGIN_URL:-http://localhost:4000}"
+      FEED_MODE: "${FEED_MODE:-fulltext}"
+      CRON_EXPRESSION: "${CRON_EXPRESSION:-35 5,17 * * *}"
+      MAX_REQUEST_PER_MINUTE: "${MAX_REQUEST_PER_MINUTE:-60}"
+      ENABLE_CLEAN_HTML: "${ENABLE_CLEAN_HTML:-true}"
+      UPDATE_DELAY_TIME: "${UPDATE_DELAY_TIME:-60}"
+      PLATFORM_URL: "${PLATFORM_URL:-https://weread.111965.xyz}"
+    volumes:
+      - ./data:/app/data
