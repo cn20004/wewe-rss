@@ -282,11 +282,23 @@ export class TrpcRouter {
           limit: z.number().min(1).max(1000).nullish(),
           cursor: z.string().nullish(),
           mpId: z.string().nullish(),
+          keyword: z.string().trim().max(200).nullish(),
         }),
       )
       .query(async ({ input }) => {
         const limit = input.limit ?? 1000;
-        const { cursor, mpId } = input;
+        const { cursor, mpId, keyword } = input;
+
+        const where = {
+          ...(mpId ? { mpId } : {}),
+          ...(keyword
+            ? {
+                title: {
+                  contains: keyword,
+                },
+              }
+            : {}),
+        };
 
         const items = await this.prismaService.article.findMany({
           orderBy: [
@@ -295,7 +307,7 @@ export class TrpcRouter {
             },
           ],
           take: limit + 1,
-          where: mpId ? { mpId } : undefined,
+          where: Object.keys(where).length > 0 ? where : undefined,
           cursor: cursor
             ? {
                 id: cursor,
