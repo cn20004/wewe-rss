@@ -8,6 +8,7 @@ import Axios, { AxiosInstance } from 'axios';
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
+import { load } from 'cheerio';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -316,6 +317,128 @@ export class TrpcService {
     } finally {
       this.isRefreshAllMpArticlesRunning = false;
     }
+  }
+
+  async archiveArticle(id: string) {
+    const article = await this.prismaService.article.findUnique({
+      where: { id },
+    });
+    if (!article) {
+      throw new Error(`文章不存在: ${id}`);
+    }
+
+    await this.prismaService.article.update({
+      where: { id },
+      data: {
+        archiveStatus: 3,
+        archiveError: null,
+      },
+    });
+
+    const url = `https://mp.weixin.qq.com/s/${id}`;
+
+    try {
+      const html = await Axios.get<string>(url, {
+        timeout: 20 * 1e3,
+        headers: {
+          'user-agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
+          accept:
+            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      }).then((res) => res.data);
+
+      const $ = load(html, { decodeEntities: false });
+      const contentNode = $('.rich_media_content').first();
+
+      if (!contentNode.length) {
+        throw new Error('没有找到公众号正文节点 rich_media_content');
+      }
+
+      contentNode.find('img').each((_, element) => {
+        const img = $(element);
+        const dataSrc = img.attr('data-src');
+        if (dataSrc && !img.attr('src')) {
+          img.attr('src', dataSrc);
+        }
+      });
+
+      const contentHtml = $.html(contentNode);
+      const contentText = contentNode
+        .text()
+        .replace(/\u00a0/g, ' ')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
+      return await this.prismaService.article.update({
+        where: { id },
+        data: {
+          contentHtml,
+          contentText,
+          archiveStatus: 1,
+          archiveError: null,
+          archivedAt: new Date(),
+        },
+      });
+    } catch (error: any) {
+      const message = String(error?.message || error).slice(0, 2000);
+      await this.prismaService.article.update({
+        where: { id },
+        data: {
+          archiveStatus: 2,
+          archiveError: message,
+        },
+      });
+      throw error;
+    }
+  }
+
+  async archiveArticlesBatch(options: {
+    mpId?: string;
+    limit?: number;
+    retryFailed?: boolean;
+  }) {
+    const { mpId, limit = 20, retryFailed = true } = options;
+    const statuses = retryFailed ? [0, 2] : [0];
+
+    const articles = await this.prismaService.article.findMany({
+      where: {
+        ...(mpId ? { mpId } : {}),
+        archiveStatus: { in: statuses },
+      },
+      orderBy: { publishTime: 'desc' },
+      take: Math.min(Math.max(limit, 1), 100),
+      select: { id: true, title: true },
+    });
+
+    const results: {
+      id: string;
+      title: string;
+      ok: boolean;
+      error?: string;
+    }[] = [];
+
+    for (const article of articles) {
+      try {
+        await this.archiveArticle(article.id);
+        results.push({ ...article, ok: true });
+      } catch (error: any) {
+        results.push({
+          ...article,
+          ok: false,
+          error: String(error?.message || error),
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+
+    return {
+      total: results.length,
+      success: results.filter((item) => item.ok).length,
+      failed: results.filter((item) => !item.ok).length,
+      results,
+    };
   }
 
   async getMpInfo(url: string) {

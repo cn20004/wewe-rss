@@ -34,7 +34,7 @@ const Nav = () => {
   const [releaseVersion, setReleaseVersion] = useState(appVersion);
 
   useEffect(() => {
-    fetch('https://api.github.com/repos/cooderl/wewe-rss/releases/latest')
+    fetch('https://api.github.com/repos/cn20004/wewe-rss/releases/latest')
       .then((res) => res.json())
       .then((data) => {
         setReleaseVersion(data.name.replace('v', ''));
@@ -52,7 +52,7 @@ const Nav = () => {
             <div className="p-1">
               {isFoundNewVersion && (
                 <Link
-                  href={`https://github.com/cooderl/wewe-rss/releases/latest`}
+                  href={`https://github.com/cn20004/wewe-rss/releases/latest`}
                   target="_blank"
                   className="mb-1 block text-medium"
                 >
@@ -81,7 +81,7 @@ const Nav = () => {
                 }
               ></Image>
             </Badge>
-            <p className="font-bold text-inherit">WeWe RSS</p>
+            <div className="leading-tight"><p className="font-bold text-inherit">WeWe RSS 20004 Edition</p><p className="text-[10px] text-default-500">郑老师魔改版 · v0.1.0</p></div>
           </NavbarBrand>
         </Tooltip>
         <NavbarContent className="hidden sm:flex gap-4" justify="center">
@@ -101,7 +101,7 @@ const Nav = () => {
         <NavbarContent justify="end">
           <ThemeSwitcher></ThemeSwitcher>
           <Link
-            href="https://github.com/cooderl/wewe-rss"
+            href="https://github.com/cn20004/wewe-rss"
             target="_blank"
             color="foreground"
           >

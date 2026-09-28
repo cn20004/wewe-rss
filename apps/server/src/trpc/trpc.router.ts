@@ -282,11 +282,24 @@ export class TrpcRouter {
           limit: z.number().min(1).max(1000).nullish(),
           cursor: z.string().nullish(),
           mpId: z.string().nullish(),
+          keyword: z.string().trim().max(200).nullish(),
         }),
       )
       .query(async ({ input }) => {
         const limit = input.limit ?? 1000;
-        const { cursor, mpId } = input;
+        const { cursor, mpId, keyword } = input;
+
+        const where = {
+          ...(mpId ? { mpId } : {}),
+          ...(keyword
+            ? {
+                OR: [
+                  { title: { contains: keyword } },
+                  { contentText: { contains: keyword } },
+                ],
+              }
+            : {}),
+        };
 
         const items = await this.prismaService.article.findMany({
           orderBy: [
@@ -295,7 +308,7 @@ export class TrpcRouter {
             },
           ],
           take: limit + 1,
-          where: mpId ? { mpId } : undefined,
+          where: Object.keys(where).length > 0 ? where : undefined,
           cursor: cursor
             ? {
                 id: cursor,
@@ -352,6 +365,54 @@ export class TrpcRouter {
         });
 
         return article;
+      }),
+    archive: this.trpcService.protectedProcedure
+      .input(z.string())
+      .mutation(async ({ input: id }) => {
+        try {
+          return await this.trpcService.archiveArticle(id);
+        } catch (err: any) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: err?.message || '正文归档失败',
+          });
+        }
+      }),
+    archiveBatch: this.trpcService.protectedProcedure
+      .input(
+        z.object({
+          mpId: z.string().optional(),
+          limit: z.number().min(1).max(100).optional().default(20),
+          retryFailed: z.boolean().optional().default(true),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        return this.trpcService.archiveArticlesBatch(input);
+      }),
+    archiveStats: this.trpcService.protectedProcedure
+      .input(
+        z.object({
+          mpId: z.string().optional(),
+        }),
+      )
+      .query(async ({ input }) => {
+        const where = input.mpId ? { mpId: input.mpId } : {};
+        const [total, archived, failed, pending, running] = await Promise.all([
+          this.prismaService.article.count({ where }),
+          this.prismaService.article.count({
+            where: { ...where, archiveStatus: 1 },
+          }),
+          this.prismaService.article.count({
+            where: { ...where, archiveStatus: 2 },
+          }),
+          this.prismaService.article.count({
+            where: { ...where, archiveStatus: 0 },
+          }),
+          this.prismaService.article.count({
+            where: { ...where, archiveStatus: 3 },
+          }),
+        ]);
+        return { total, archived, failed, pending, running };
       }),
     delete: this.trpcService.protectedProcedure
       .input(z.string())
